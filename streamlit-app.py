@@ -9,11 +9,29 @@ from llama_index.core.text_splitter import TokenTextSplitter
 from llama_index.core.node_parser import SimpleNodeParser
 import pypdf
 from llama_index.core import Settings
+from sentence_transformers import SentenceTransformer, util
 import sys
 sys.path.append('.')
 from src.generate import create_agent_group, create_plan
 from src.prompt import Prompt
 import json
+
+# Load the rerank model
+rerank_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Function to rerank passages based on cosine similarity
+def rerank_passages(question, passages, topk=3):
+    """Reranks retrieved passages based on cosine similarity to the question."""
+    inputs = [question] + passages
+    embeddings = rerank_model.encode(inputs, convert_to_tensor=True)
+    
+    question_emb = embeddings[0]
+    passage_embs = embeddings[1:]
+    
+    scores = util.pytorch_cos_sim(question_emb, passage_embs)[0]
+    top_indices = scores.argsort(descending=True)[:topk]
+    
+    return [passages[i] for i in top_indices]
 
 # Set page configuration
 st.set_page_config(page_title="ActiveRAG Document Q&A", layout="wide")
@@ -53,7 +71,7 @@ with st.sidebar:
     st.header("Model Settings")
     model_selection = st.selectbox(
         "Select LLM Model",
-        ["llama3.2", "llama3", "llama2"],
+        ["llama3.2:1b", "llama3.2", "llama3", "llama2"],
         index=0
     )
     
@@ -134,6 +152,8 @@ if user_input := st.chat_input("Ask a question about your document"):
                     st.error("⚠️ No relevant content found. Try uploading a more detailed document.")
                     st.stop()
 
+                st.write("🔄 Reranking passages based on relevance...")
+                passages = rerank_passages(user_input, passages, topk=3)
                 st.write("🧠 Setting up ActiveRAG agent group...")
                 input_dict = {
                     'question': user_input,

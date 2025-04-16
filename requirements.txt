@@ -2,3 +2,5 @@ openai
 aiohttp
 numpy
 requests
+llama-index-embeddings-huggingface
+llama-index-llms-ollama
