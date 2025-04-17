@@ -11,10 +11,6 @@ class OllamaClient:
         self.default_model = default_model
 
     def chat_completion_create(self, messages, model=None, temperature=0.2, n=1):
-        """
-        Mocks an OpenAI-like chat completion call,
-        but actually requests Ollama's /generate endpoint.
-        """
         # Build the prompt from the conversation history
         prompt_text = ""
         for m in messages:
@@ -26,19 +22,15 @@ class OllamaClient:
             "prompt": prompt_text,
             "model": used_model,
             "temperature": temperature,
-            "stream": False  # <--- Ensure we get a single JSON result
+            "stream": False
         }
 
         import requests
         resp = requests.post(f"{self.base_url}/api/generate", json=payload)
-        resp.raise_for_status()  # Will raise an error if HTTP != 200
-
-        # This should now be valid JSON because stream=False
+        resp.raise_for_status()
         data = resp.json()
 
-        # If Ollama returns something like: {"response":"the final text"}
         text = data.get("response", "") or data.get("generated_text", "")
-
         return {
             "choices": [
                 {
@@ -53,7 +45,6 @@ class OllamaClient:
 # Instantiate the Ollama client
 MODEL = "llama3.2"
 client = OllamaClient(default_model=MODEL)
-
 DEFAULT_PROMPT = ""
 
 class Agent:
@@ -92,7 +83,6 @@ class Agent:
         except Exception as e:
             print("Error in send_message:", e)
             time.sleep(5)
-            # Retry once
             ans = client.chat_completion_create(
                 messages=self.message,
                 model=self.model,
@@ -103,8 +93,6 @@ class Agent:
             return ans
 
     async def send_message_async(self, session):
-        # For asynchronous operation, we'll just call the synchronous version
-        # This could be optimized in a future implementation
         return self.send_message()
 
     def padding_template(self, input_dict):
@@ -137,6 +125,15 @@ class Agent:
             "No assistant response yet."
         return self.message[-1]['content']
 
+    def get_final_answer(self):
+        """
+        Extract the final answer from assistant's last message.
+        """
+        response = self.get_output()
+        if "Answer:" in response:
+            return response.split("Answer:")[-1].strip()
+        return response.strip()
+
     def parse_message(self, completion):
         content = completion["choices"][0]["message"]["content"]
         role = completion["choices"][0]["message"]["role"]
@@ -145,7 +142,6 @@ class Agent:
         return record
 
     def parse_message_json(self, completion):
-        # Same as parse_message for compatibility
         return self.parse_message(completion)
 
     def regist_fn(self, func, name):

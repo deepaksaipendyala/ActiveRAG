@@ -2,6 +2,8 @@ import re, json, string
 from tqdm import tqdm
 import numpy as np
 import collections
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 def normalize_answer(s):
     def remove_articles(text):
@@ -50,3 +52,25 @@ def exact_presence(answers, context):
             return True
 
     return False
+
+def get_embedding(texts, embed_model):
+    if isinstance(texts, str):
+        texts = [texts]
+    return np.array([embed_model.get_text_embedding(t) for t in texts])
+
+def ras_score(x, y, embed_model):
+    x_q, x_r = x['query'], x['references']
+    y_q, y_r = y['query'], y['references']
+
+    x_p = x_q + ' ' + x_r
+    y_p = y_q + ' ' + y_r
+
+    emb_q = get_embedding([x_q, y_q], embed_model)
+    emb_r = get_embedding([x_r, y_r], embed_model)
+    emb_p = get_embedding([x_p, y_p], embed_model)
+
+    sim_q = cosine_similarity([emb_q[0]], [emb_q[1]])[0][0]
+    sim_r = cosine_similarity([emb_r[0]], [emb_r[1]])[0][0]
+    sim_p = cosine_similarity([emb_p[0]], [emb_p[1]])[0][0]
+
+    return min(sim_p, 0.5 * (sim_q + sim_r))
